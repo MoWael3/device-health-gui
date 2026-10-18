@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Device Health Dashboard
+Comment=Live CPU, memory, disk, temperature and network monitor
+Exec="/home/mwael/Documents/Default Project/device-health-gui/run.sh"
+Path=/home/mwael/Documents/Default Project/device-health-gui
+Icon=/home/mwael/Documents/Default Project/device-health-gui/src/device_health_gui/icon.svg
+Terminal=false
+Categories=System;Monitor;
+Keywords=health;monitor;cpu;memory;temperature;
+StartupNotify=true
+StartupWMClass=Device Health Dashboard
