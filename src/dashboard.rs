@@ -111,13 +111,20 @@ pub struct Dashboard {
     selected: Option<metrics::ProcDetails>,
     confirm_end: bool,
     proc_msg: Option<(bool, String)>,
+    /// Screen rects of the process rows drawn last frame.
+    proc_rows: Vec<Rect>,
 }
 
 impl Dashboard {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        apply_style(&cc.egui_ctx);
         let (tx, rx) = mpsc::channel();
         metrics::spawn_sampler(Duration::from_secs(1), tx, cc.egui_ctx.clone());
+        Self::with_receiver(&cc.egui_ctx, rx)
+    }
+
+    /// Builds the dashboard around an existing snapshot source (tests feed their own).
+    fn with_receiver(ctx: &egui::Context, rx: Receiver<Snapshot>) -> Self {
+        apply_style(ctx);
         let host = System::host_name()
             .map(|h| h.trim().to_string())
             .filter(|h| !h.is_empty())
@@ -143,6 +150,7 @@ impl Dashboard {
             selected: None,
             confirm_end: false,
             proc_msg: None,
+            proc_rows: Vec::new(),
         }
     }
 
@@ -385,13 +393,14 @@ impl Dashboard {
     }
 
     /// Returns the PID of a clicked row.
-    fn processes(&self, ui: &egui::Ui, outer: Rect) -> Option<u32> {
+    fn processes(&mut self, ui: &egui::Ui, outer: Rect) -> Option<u32> {
+        self.proc_rows.clear();
         let p = ui.painter();
         card(p, outer);
         let r = outer.shrink2(vec2(theme::S3 - 4.0, theme::S2));
         let p = p.with_clip_rect(outer.shrink(1.0));
         card_title(&p, r, "Top processes");
-        text_right(&p, r.right(), r.top() + 12.0, &format!("top {TOP_N} by CPU"), font(theme::F_LABEL), theme::MUTED);
+        text_right(&p, r.right(), r.top() + 12.0, &format!("top {TOP_N} by CPU · click a row for details"), font(theme::F_LABEL), theme::MUTED);
 
         let col = 64.0;
         let right_edges = [r.right() - 2.0 * col, r.right() - col, r.right()];
@@ -417,6 +426,7 @@ impl Dashboard {
                 p.rect_filled(row, 0.0, theme::ROW);
             }
             let Some(pr) = procs.get(i) else { continue };
+            self.proc_rows.push(row);
             let resp = ui
                 .interact(row.intersect(outer.shrink(1.0)), egui::Id::unique(("proc_row", i)), Sense::click())
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -637,6 +647,12 @@ fn apply_style(ctx: &egui::Context) {
 
 impl eframe::App for Dashboard {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.show(ui);
+    }
+}
+
+impl Dashboard {
+    fn show(&mut self, ui: &mut egui::Ui) {
         while let Ok(s) = self.rx.try_recv() {
             self.apply_snapshot(s);
         }
@@ -652,5 +668,64 @@ impl eframe::App for Dashboard {
         self.process_window(&ui.ctx().clone());
         // Keep the clock ticking even if a sample is late.
         ui.ctx().request_repaint_after(Duration::from_secs(1));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metrics::ProcInfo;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
+
+    fn click(h: &Harness<'_, Dashboard>, pos: egui::Pos2) {
+        h.event(egui::Event::PointerMoved(pos));
+        for pressed in [true, false] {
+            h.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            });
+        }
+    }
+
+    #[test]
+    fn clicking_a_process_row_opens_details() {
+        let mut child = std::process::Command::new(if cfg!(windows) { "ping" } else { "sleep" })
+            .args(if cfg!(windows) { vec!["-n", "60", "127.0.0.1"] } else { vec!["60"] })
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let (tx, rx) = mpsc::channel();
+        tx.send(Snapshot {
+            per_core: vec![10.0; 4],
+            mem_total: 1 << 30,
+            procs: vec![ProcInfo { pid: child.id(), name: "sleep".into(), cpu: 1.0, mem: 0.1 }],
+            ..Default::default()
+        })
+        .unwrap();
+        let ctx = egui::Context::default();
+        let app = Dashboard::with_receiver(&ctx, rx);
+        let mut h = Harness::builder()
+            .with_size(vec2(1280.0, 860.0))
+            // The app gets "●", "↑" etc. from system fonts; the test context has none.
+            .allow_missing_glyphs()
+            .build_ui_state(|ui, app: &mut Dashboard| app.show(ui), app);
+        h.run_steps(3);
+
+        let row = *h.state().proc_rows.first().expect("process row is drawn");
+        click(&h, row.center());
+        h.run_steps(3);
+        let selected = h.state().selected.as_ref().map(|d| d.pid);
+        assert_eq!(selected, Some(child.id()), "click should open the details popup");
+        // The popup's End process button is a real widget.
+        h.get_by_label("End process").click();
+        h.run_steps(2);
+        assert!(h.state().confirm_end, "End process should ask for confirmation");
+        h.get_by_label("Yes, end it").click();
+        h.run_steps(2);
+        assert!(child.wait().is_ok());
+        assert!(matches!(h.state().proc_msg, Some((true, _))), "{:?}", h.state().proc_msg);
     }
 }

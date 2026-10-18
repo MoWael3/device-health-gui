@@ -375,6 +375,8 @@ mod tests {
             c
         };
         let mut child = cmd.stdout(std::process::Stdio::null()).spawn().unwrap();
+        // Give the child a moment to exec so its command line is the new one.
+        thread::sleep(Duration::from_millis(300));
         let d = proc_details(child.id()).expect("child should be visible");
         assert_eq!(d.pid, child.id());
         assert!(d.cmd.contains("60"));

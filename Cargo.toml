@@ -13,3 +13,6 @@ sysinfo = "0.39.6"
 
 [profile.release]
 strip = true
+
+[dev-dependencies]
+egui_kittest = "0.37.0"
