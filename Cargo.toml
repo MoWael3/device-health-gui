@@ -1,0 +1,15 @@
+[package]
+name = "device-health-dashboard"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Cross-platform device health dashboard with an optional opencode AI summary"
+
+[dependencies]
+chrono = "0.4.45"
+eframe = "0.37.0"
+egui = "0.37.0"
+sysinfo = "0.39.6"
+
+[profile.release]
+strip = true
