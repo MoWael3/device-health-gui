@@ -11,3 +11,4 @@ wheels/
 
 # Rust build output
 /target
+/dist

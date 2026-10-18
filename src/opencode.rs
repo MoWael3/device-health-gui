@@ -119,13 +119,25 @@ fn find_binary() -> Result<PathBuf, String> {
     if let Some(p) = which("opencode") {
         return Ok(p);
     }
-    // Apps launched from a desktop menu don't get the shell's PATH.
-    let exe = if cfg!(windows) { "opencode.exe" } else { "opencode" };
-    let fallback = home_dir().map(|h| h.join(".opencode").join("bin").join(exe));
-    match fallback {
-        Some(p) if p.is_file() => Ok(p),
-        _ => Err("opencode not found ('opencode'). Install it or set OPENCODE_BIN.".into()),
+    // Apps launched from a desktop menu, Finder or the Dock don't get the
+    // shell's PATH, so also look where the installers usually put opencode.
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Some(h) = home_dir() {
+        dirs.push(h.join(".opencode").join("bin"));
+        dirs.push(h.join(".local").join("bin"));
     }
+    if cfg!(target_os = "macos") {
+        dirs.push("/opt/homebrew/bin".into()); // Homebrew, Apple Silicon
+        dirs.push("/usr/local/bin".into()); // Homebrew, Intel
+    }
+    if cfg!(windows) {
+        if let Some(appdata) = env::var_os("APPDATA") {
+            dirs.push(PathBuf::from(appdata).join("npm"));
+        }
+    }
+    dirs.iter()
+        .find_map(|d| which(&d.join("opencode").to_string_lossy()))
+        .ok_or_else(|| "opencode not found ('opencode'). Install it or set OPENCODE_BIN.".into())
 }
 
 fn read_all(r: Option<impl Read + Send + 'static>) -> thread::JoinHandle<String> {

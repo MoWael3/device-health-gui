@@ -69,6 +69,30 @@ cargo run --release
 ```
 Works on both Apple Silicon and Intel Macs.
 
+#### Making a .dmg
+On a Mac, one command builds a universal app (Apple Silicon + Intel) and wraps
+it in a disk image:
+```bash
+./scripts/make-dmg.sh
+```
+The result is `dist/Device-Health-Dashboard-<version>-macos-universal.dmg`.
+Open it and drag **Device Health Dashboard** into **Applications**.
+
+No Mac? Push the repo to GitHub and run the **macOS dmg** workflow from the
+Actions tab (or push a tag like `v0.1.0`). It runs the same script on a
+GitHub-hosted Mac and attaches the `.dmg` to the run.
+
+A `.dmg` can't be built on Linux or Windows: linking a macOS app needs Apple's
+SDK, and `hdiutil` only exists on macOS.
+
+The app is ad-hoc signed, not notarized with an Apple Developer ID, so the first
+time you open it macOS says it can't verify the developer. Right-click the app
+and choose **Open** (on macOS 15+, use **System Settings → Privacy & Security →
+Open Anyway**). Or clear the download flag:
+```bash
+xattr -dr com.apple.quarantine "/Applications/Device Health Dashboard.app"
+```
+
 ### Windows
 Install Rust with `rustup-init.exe` and pick the MSVC toolchain (it prompts you
 to install the Visual Studio C++ Build Tools). Then, in PowerShell or cmd:
@@ -100,6 +124,10 @@ To override:
 - `OPENCODE_BIN`: path to the opencode binary
 - `OPENCODE_MODEL`: `provider/model` passed to `--model`
 
+When the app is started from a menu, Finder or the Dock (which don't pass your
+shell's PATH), it also looks in `~/.local/bin`, Homebrew's `/opt/homebrew/bin`
+and `/usr/local/bin` on macOS, and `%APPDATA%\npm` on Windows.
+
 On Windows an npm-installed `opencode.cmd` works too. Its prompt is sent as a
 single line, because batch-file arguments can't contain newlines.
 
@@ -112,7 +140,9 @@ src/metrics.rs     sysinfo sampling on a background thread
 src/widgets.rs     ring gauge, line chart, badge, bars, metric card
 src/opencode.rs    prompt and `opencode run` subprocess
 src/theme.rs       colors, spacing, formatting helpers
-assets/            app icon (SVG for the launcher, PNG for the window)
+assets/            app icon (SVG for the launcher, PNGs for the window and macOS app)
+scripts/make-dmg.sh   macOS .app + .dmg packaging (run on a Mac)
+.github/workflows/macos-dmg.yml   builds the .dmg on a GitHub-hosted Mac
 run.sh, device-health-dashboard.desktop   Linux launcher
 ```
 
