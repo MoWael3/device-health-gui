@@ -1,12 +1,11 @@
 [project]
 name = "device-health-gui"
 version = "0.1.0"
-description = "Add your description here"
+description = "Lightweight PyQt6 device health dashboard for Linux with an optional AI summary"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pyqt6>=6.11.0",
-    "pywebview>=6.2.1",
 ]
 
 [project.scripts]
