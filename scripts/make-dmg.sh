@@ -3,6 +3,13 @@
 # package it as a .dmg in dist/. Must run on macOS: it needs Xcode's command
 # line tools (xcode-select --install) for linking, plus sips, iconutil,
 # lipo and hdiutil, which ship with macOS.
+#
+# Optional, for an app every Mac trusts (needs an Apple Developer account):
+#   MACOS_SIGN_IDENTITY   e.g. "Developer ID Application: Mo Wael (TEAMID)",
+#                         a certificate already in the keychain
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD
+#                         notarize with Apple and staple the ticket
+# Without them the app is ad-hoc signed and macOS asks before first launch.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -65,8 +72,14 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
-# 4. Ad-hoc signature, so Apple Silicon will run it (not notarized).
-codesign --force --deep --sign - "$APP"
+# 4. Sign: Developer ID (hardened runtime, as notarization requires) when
+#    available, otherwise ad-hoc so Apple Silicon will still run it.
+SIGN_ID="${MACOS_SIGN_IDENTITY:-}"
+if [ -n "$SIGN_ID" ]; then
+    codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP"
+else
+    codesign --force --deep --sign - "$APP"
+fi
 
 # 5. Disk image with the app and a shortcut to /Applications.
 STAGE="$WORK/dmg"
@@ -75,5 +88,15 @@ cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG"
 hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+
+if [ -n "$SIGN_ID" ]; then
+    codesign --force --timestamp --sign "$SIGN_ID" "$DMG"
+    if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ]; then
+        xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+        xcrun stapler staple "$DMG"
+        echo "Notarized and stapled $DMG"
+    fi
+fi
 
 echo "Built $DMG"

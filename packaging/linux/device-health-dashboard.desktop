@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Device Health Dashboard
+Comment=Live CPU, memory, disk, temperature and network monitor
+Exec=device-health-dashboard
+Icon=device-health-dashboard
+Terminal=false
+Categories=System;Monitor;
+Keywords=health;monitor;cpu;memory;temperature;
+StartupNotify=true
+StartupWMClass=device-health-dashboard

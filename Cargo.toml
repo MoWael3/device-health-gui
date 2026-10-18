@@ -1,9 +1,11 @@
 [package]
 name = "device-health-dashboard"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.95"
 description = "Cross-platform device health dashboard with an optional opencode AI summary"
+authors = ["Mo Wael <mowaelmohammed@gmail.com>"]
+repository = "https://github.com/MoWael3/device-health-gui"
 
 [dependencies]
 chrono = "0.4.45"
@@ -16,3 +18,14 @@ strip = true
 
 [dev-dependencies]
 egui_kittest = "0.37.0"
+
+[package.metadata.deb]
+maintainer = "Mo Wael <mowaelmohammed@gmail.com>"
+section = "utils"
+extended-description = "Live CPU, memory, disk, temperature and network monitor with per-core bars, top processes and an optional opencode AI health summary."
+assets = [
+    ["target/release/device-health-dashboard", "usr/bin/", "755"],
+    ["packaging/linux/device-health-dashboard.desktop", "usr/share/applications/", "644"],
+    ["assets/icon.svg", "usr/share/icons/hicolor/scalable/apps/device-health-dashboard.svg", "644"],
+    ["assets/icon.png", "usr/share/icons/hicolor/256x256/apps/device-health-dashboard.png", "644"],
+]

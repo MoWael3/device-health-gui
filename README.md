@@ -32,6 +32,27 @@ see [Legacy Python app](#legacy-python-app).
 When a metric isn't available, its card shows "N/A" and it doesn't count
 toward the overall health badge.
 
+## Download
+
+Ready-made builds are on the
+[Releases page](https://github.com/MoWael3/device-health-gui/releases/latest):
+
+| OS | File | How to install |
+|---|---|---|
+| macOS (Apple Silicon + Intel) | `Device-Health-Dashboard-<version>-macos-universal.dmg` | Open it, drag the app into **Applications** |
+| Windows 10/11 (x64) | `device-health-dashboard-<version>-windows-x86_64.zip` | Unzip, double-click `device-health-dashboard.exe` |
+| Debian, Ubuntu, Mint (x64) | `device-health-dashboard_<version>-1_amd64.deb` | `sudo apt install ./device-health-dashboard_*.deb`, then find it in the app menu |
+| Other Linux (x64) | `device-health-dashboard-<version>-linux-x86_64.tar.gz` | Unpack, run `./device-health-dashboard` |
+
+`SHA256SUMS.txt` lists each file's checksum.
+
+Until the builds are signed (see [Code signing](#code-signing)), macOS and
+Windows warn the first time you open the app:
+- **macOS:** System Settings → Privacy & Security → **Open Anyway** (macOS 15+),
+  or right-click the app → **Open** on older versions.
+- **Windows:** on the "Windows protected your PC" screen, click **More info →
+  Run anyway**.
+
 ## Build and run
 
 You need a Rust toolchain, version 1.95 or newer. Install it from
@@ -78,19 +99,22 @@ it in a disk image:
 The result is `dist/Device-Health-Dashboard-<version>-macos-universal.dmg`.
 Open it and drag **Device Health Dashboard** into **Applications**.
 
-No Mac? Push the repo to GitHub and run the **macOS dmg** workflow from the
-Actions tab (or push a tag like `v0.1.0`). It runs the same script on a
-GitHub-hosted Mac and attaches the `.dmg` to the run.
+No Mac? The [Release workflow](#releases) builds it on a GitHub-hosted Mac.
 
 A `.dmg` can't be built on Linux or Windows: linking a macOS app needs Apple's
 SDK, and `hdiutil` only exists on macOS.
 
-The app is ad-hoc signed, not notarized with an Apple Developer ID, so the first
-time you open it macOS says it can't verify the developer. Right-click the app
-and choose **Open** (on macOS 15+, use **System Settings → Privacy & Security →
-Open Anyway**). Or clear the download flag:
+Without a Developer ID (see [Code signing](#code-signing)) the app is ad-hoc
+signed, so macOS asks before the first launch. You can also clear the download
+flag:
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Device Health Dashboard.app"
+```
+
+### Linux packages
+```bash
+cargo install cargo-deb      # once, for the .deb
+./scripts/package-linux.sh   # dist/*.tar.gz and dist/*.deb
 ```
 
 ### Windows
@@ -101,6 +125,8 @@ cargo run --release
 ```
 Release builds open without a console window. To get a Start-menu entry,
 create a shortcut to `target\release\device-health-dashboard.exe`.
+
+`./scripts/package-windows.ps1` builds the release `.zip` into `dist\`.
 
 ### Cross-checking other targets
 From any OS you can check that the other platforms still compile:
@@ -114,6 +140,37 @@ cargo check --release --target aarch64-apple-darwin
 ```bash
 cargo test --release
 ```
+
+## Releases
+`.github/workflows/release.yml` builds all three platforms on GitHub's
+machines:
+
+- **Actions tab → Release → Run workflow** builds everything and attaches the
+  files to that run (GitHub keeps them 90 days).
+- **Pushing a version tag** builds everything and publishes a GitHub Release
+  with the files and checksums. Bump `version` in `Cargo.toml` first, then:
+  ```bash
+  git tag v0.1.2 && git push origin v0.1.2
+  ```
+
+## Code signing
+Signing is what stops the "unknown developer" warnings. Operating systems only
+trust certificates from their own programs, so it needs paid accounts. A
+self-made certificate doesn't help. The workflow signs automatically as soon as
+you add these as repository secrets (**Settings → Secrets and variables →
+Actions**):
+
+| Platform | What you need | Secrets |
+|---|---|---|
+| macOS | [Apple Developer Program](https://developer.apple.com/programs/) (US$99/year): create a **Developer ID Application** certificate, export it as `.p12`, and make an [app-specific password](https://support.apple.com/102654) for notarization | `MACOS_CERT_P12` (base64 of the `.p12`), `MACOS_CERT_PASSWORD`, `MACOS_SIGN_IDENTITY` (e.g. `Developer ID Application: Mo Wael (TEAMID)`), `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` |
+| Windows | A code-signing certificate as a `.pfx` from a certificate authority (e.g. DigiCert, Sectigo, SSL.com). New certificates build SmartScreen reputation over time | `WINDOWS_CERT_PFX` (base64 of the `.pfx`), `WINDOWS_CERT_PASSWORD` |
+| Linux | Nothing; Linux has no central app signing. Check downloads against `SHA256SUMS.txt` | none |
+
+To base64-encode a certificate file: `base64 -i cert.p12 | pbcopy` on macOS, or
+`base64 -w0 cert.pfx` on Linux.
+
+With the macOS secrets set, the `.dmg` is signed with your Developer ID,
+notarized by Apple and stapled, so it opens on any Mac without warnings.
 
 ## AI health summary
 The "Analyze with opencode" button sends the last 60 s of averaged readings
@@ -141,8 +198,11 @@ src/widgets.rs     ring gauge, line chart, badge, bars, metric card
 src/opencode.rs    prompt and `opencode run` subprocess
 src/theme.rs       colors, spacing, formatting helpers
 assets/            app icon (SVG for the launcher, PNGs for the window and macOS app)
-scripts/make-dmg.sh   macOS .app + .dmg packaging (run on a Mac)
-.github/workflows/macos-dmg.yml   builds the .dmg on a GitHub-hosted Mac
+scripts/make-dmg.sh         macOS .app + .dmg packaging (run on a Mac)
+scripts/package-windows.ps1 Windows .zip packaging (optional signing)
+scripts/package-linux.sh    Linux .tar.gz + .deb packaging
+packaging/linux/            .desktop entry used by the packages
+.github/workflows/release.yml   builds all platforms and publishes releases
 run.sh, device-health-dashboard.desktop   Linux launcher
 ```
 
